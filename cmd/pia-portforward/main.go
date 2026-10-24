@@ -166,7 +166,7 @@ func main() {
 			log.Panicf("Token expired and user/pass not provided")
 		}
 		if err := tun.NewToken(cli.Username, cli.Password); err != nil {
-			log.Panicf("Token expired; error refreshing: %v", err)
+			log.Panicf("Could not refresh expired token: %v", err)
 		}
 	}
 
