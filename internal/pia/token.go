@@ -44,9 +44,9 @@ func (tun *Tunnel) NewToken(username string, password string) error {
 	}
 	if tokenResp.Token == "" {
 		if tokenResp.Status != "" || tokenResp.Message != "" {
-			return fmt.Errorf("Error generating PIA token: status=\"%s\" message=\"%s\"", tokenResp.Status, tokenResp.Message)
+			return fmt.Errorf("error generating PIA token: status=\"%s\" message=\"%s\"", tokenResp.Status, tokenResp.Message)
 		}
-		return fmt.Errorf("Error generating PIA token: empty token response (HTTP %s)", resp.Status)
+		return fmt.Errorf("error generating PIA token: empty token response (HTTP %s)", resp.Status)
 	}
 	day, _ := time.ParseDuration("23h55m")
 	tun.Token = Token{
