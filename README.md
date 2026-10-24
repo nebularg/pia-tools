@@ -790,6 +790,7 @@ This command must be executed after the tunnel is active.
 | `--qbittorrent-password string`  | QBITTORRENT_PASSWORD  | _none_  | Qbittorrent WebUI password key (if required)                            |
 | `--qbittorrent-apikey string`    | QBITTORRENT_APIKEY    | _none_  | Qbittorrent WebUI api key (if required)                                 |
 | `--refresh`                      | _n/a_                 | _unset_ | Don't get a new port forwarding assignment, just refresh the active one |
+| `--script path`, `-s path`       | _n/a_                 | _none_  | Executable to run after the port is bound (repeatable; see below)       |
 
 #### Example Usage
 
@@ -838,6 +839,38 @@ export PIA_USERNAME=user
 export PIA_PASSWORD=pass
 
 pia-portforward --if-name pia --refresh
+```
+
+__Run custom scripts.__ Each `--script` (or `-s`) is executed, in the order
+given, after the port is bound and any bittorrent clients have been notified.
+Scripts must be executable (with a shebang line if they are shell scripts). They
+inherit `pia-portforward`'s environment, plus the following variables:
+
+| Variable               | Meaning                                                                             |
+|------------------------|-------------------------------------------------------------------------------------|
+| `PIA_PF_PORT`          | The forwarded port                                                                  |
+| `PIA_PF_PORT_PREVIOUS` | The forwarded port from the previous run; empty if none (e.g. after a tunnel reset) |
+| `PIA_PF_PORT_CHANGED`  | `1` if the port changed since the previous run; empty if unchanged                  |
+| `PIA_PF_EXPIRY`        | Port assignment expiry (RFC 3339)                                                   |
+| `PIA_INTERFACE`        | WireGuard interface name                                                            |
+| `PIA_STATUS`           | Status of the last PIA API call                                                     |
+| `PIA_MESSAGE`          | Message from the last PIA API call                                                  |
+| `PIA_REGION_ID`        | Region identifier                                                                   |
+| `PIA_REGION_NAME`      | Region display name                                                                 |
+| `PIA_SERVER_PORT`      | Server WireGuard port                                                               |
+| `PIA_SERVER_IP`        | Server endpoint IP                                                                  |
+| `PIA_SERVER_VIP`       | Server virtual IP inside the tunnel                                                 |
+| `PIA_PEER_IP`          | Our IP inside the tunnel                                                            |
+| `PIA_DNS_SERVERS`      | Space-separated list of PIA DNS servers                                             |
+| `PIA_TOKEN_EXPIRY`     | Token expiry (RFC 3339)                                                             |
+
+If a script fails to run or exits with a non-zero status, the failure is logged
+and `pia-portforward` carries on with the remaining scripts. Bittorrent client
+notifications are handled the same way. Once everything has run,
+`pia-portforward` exits with a non-zero status if any client or script failed.
+
+```sh
+pia-portforward --if-name pia   -s /etc/pia/update-firewall.sh   -s /etc/pia/notify.sh
 ```
 
 #### NixOS: Running CLI without installing
