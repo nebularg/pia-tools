@@ -776,21 +776,21 @@ This command must be executed after the tunnel is active.
 
 #### Flags
 
-| Flag                             | Environment Var       | Default | Meaning                                                                 |
-|----------------------------------|-----------------------|---------|-------------------------------------------------------------------------|
-| `--username string`              | PIA_USERNAME          | _none_  | Used to get a new authentication token, if expired.                     |
-| `--password string`              | PIA_PASSWORD          | _none_  | ibid                                                                    |
-| `--if-name string`               | _n/a_                 | `pia`   | Interface name associated with the active PIA tunnel                    |
-| `--rtorrent string`              | RTORRENT              | _none_  | rTorrent XML-RPC endpoint (e.g., http://localhost:5000)                 |
-| `--transmission string`          | TRANSMISSION          | _none_  | Transmission RPC endpoint (e.g., http://localhost:9091/rpc)             |
-| `--transmission-username string` | TRANSMISSION_USERNAME | _none_  | Transmission RPC username (if required)                                 |
-| `--transmission-password string` | TRANSMISSION_PASSWORD | _none_  | Transmission RPC password (if required)                                 |
-| `--qbittorrent string`           | QBITTORRENT           | _none_  | Qbittorrent WebUI endpoint (if required)                                |
-| `--qbittorrent-username string`  | QBITTORRENT_USERNAME  | _none_  | Qbittorrent WebUI username key (if required)                            |
-| `--qbittorrent-password string`  | QBITTORRENT_PASSWORD  | _none_  | Qbittorrent WebUI password key (if required)                            |
-| `--qbittorrent-apikey string`    | QBITTORRENT_APIKEY    | _none_  | Qbittorrent WebUI api key (if required)                                 |
-| `--refresh`                      | _n/a_                 | _unset_ | Don't get a new port forwarding assignment, just refresh the active one |
-| `--script path`, `-s path`       | _n/a_                 | _none_  | Executable to run after the port is bound (repeatable; see below)       |
+| Flag                             | Environment Var        | Default | Meaning                                                                 |
+|----------------------------------|------------------------|---------|-------------------------------------------------------------------------|
+| `--username string`              | PIA_USERNAME           | _none_  | Used to get a new authentication token, if expired.                     |
+| `--password string`              | PIA_PASSWORD           | _none_  | ibid                                                                    |
+| `--if-name string`               | _n/a_                  | `pia`   | Interface name associated with the active PIA tunnel                    |
+| `--rtorrent string`              | RTORRENT               | _none_  | rTorrent XML-RPC endpoint (e.g., http://localhost:5000)                 |
+| `--transmission string`          | TRANSMISSION           | _none_  | Transmission RPC endpoint (e.g., http://localhost:9091/rpc)             |
+| `--transmission-username string` | TRANSMISSION_USERNAME  | _none_  | Transmission RPC username (if required)                                 |
+| `--transmission-password string` | TRANSMISSION_PASSWORD  | _none_  | Transmission RPC password (if required)                                 |
+| `--qbittorrent string`           | QBITTORRENT            | _none_  | Qbittorrent WebUI endpoint (if required)                                |
+| `--qbittorrent-username string`  | QBITTORRENT_USERNAME   | _none_  | Qbittorrent WebUI username key (if required)                            |
+| `--qbittorrent-password string`  | QBITTORRENT_PASSWORD   | _none_  | Qbittorrent WebUI password key (if required)                            |
+| `--qbittorrent-apikey string`    | QBITTORRENT_APIKEY     | _none_  | Qbittorrent WebUI api key (if required)                                 |
+| `--refresh`                      | _n/a_                  | _unset_ | Don't get a new port forwarding assignment, just refresh the active one |
+| `--script-dir path`, `-s path`   | PORTFORWARD_SCRIPT_DIR | _none_  | Directory of executables to run after the port is bound (see below)     |
 
 #### Example Usage
 
@@ -841,10 +841,13 @@ export PIA_PASSWORD=pass
 pia-portforward --if-name pia --refresh
 ```
 
-__Run custom scripts.__ Each `--script` (or `-s`) is executed, in the order
-given, after the port is bound and any bittorrent clients have been notified.
-Scripts must be executable (with a shebang line if they are shell scripts). They
-inherit `pia-portforward`'s environment, plus the following variables:
+__Run custom scripts.__ With `--script-dir` (or `-s`), each executable file in
+the directory is run, in name order, after the port is bound and any bittorrent
+clients have been notified. Files are executed directly, so shell scripts need a
+shebang line (e.g. `#!/bin/bash`). Hidden files, subdirectories and files without
+the executable bit are skipped, so `chmod +x` a script to enable it and
+`chmod -x` to disable it. Scripts inherit `pia-portforward`'s environment, plus
+the following variables:
 
 | Variable               | Meaning                                                                             |
 |------------------------|-------------------------------------------------------------------------------------|
@@ -870,7 +873,7 @@ notifications are handled the same way. Once everything has run,
 `pia-portforward` exits with a non-zero status if any client or script failed.
 
 ```sh
-pia-portforward --if-name pia   -s /etc/pia/update-firewall.sh   -s /etc/pia/notify.sh
+pia-portforward --if-name pia --script-dir /usr/local/lib/pia/portforward.d
 ```
 
 #### NixOS: Running CLI without installing

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -33,7 +34,7 @@ type CLI struct {
 	QbtUser       string `name:"qbittorrent-username" env:"QBITTORRENT_USERNAME" help:"The qbittorrent WebUI username."`
 	QbtPassword   string `name:"qbittorrent-password" env:"QBITTORRENT_PASSWORD" help:"The qbittorrent WebUI password."`
 
-	Scripts []string `short:"s" name:"script" type:"path" sep:"none" help:"Executable to run after the port is bound, with tunnel and port forward details in PIA_* environment variables. May be repeated."`
+	ScriptDir string `short:"s" name:"script-dir" env:"PORTFORWARD_SCRIPT_DIR" type:"existingdir" help:"Directory of executables to run, in name order, after the port is bound, with tunnel and port forward details in PIA_* environment variables."`
 
 	CacheDir string `short:"c" aliases:"cachedir" default:"/var/cache/pia" help:"Directory in which to store security-sensitive cache files."`
 }
@@ -79,6 +80,37 @@ func scriptEnv(tun *pia.Tunnel, prevPort int) []string {
 		env[i] = v.name + "=" + v.value
 	}
 	return env
+}
+
+// listScripts returns the executable files in dir, sorted by name. Hidden
+// files, directories and non-executable files are skipped.
+func listScripts(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var scripts []string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		// stat rather than e.Info() so that symlinks are followed
+		info, err := os.Stat(path)
+		if err != nil {
+			log.Printf("Skipping %s: %v", path, err)
+			continue
+		}
+		if !info.Mode().IsRegular() {
+			continue
+		}
+		if info.Mode().Perm()&0o111 == 0 {
+			log.Printf("Skipping %s: not executable", path)
+			continue
+		}
+		scripts = append(scripts, path)
+	}
+	return scripts, nil
 }
 
 // runScript executes the script at path, passing through our environment
@@ -210,9 +242,14 @@ func main() {
 		checkClient("qbittorrent", port, err)
 	}
 
-	if len(cli.Scripts) > 0 {
+	if cli.ScriptDir != "" {
+		scripts, err := listScripts(cli.ScriptDir)
+		if err != nil {
+			log.Printf("Could not read script directory %s: %v", cli.ScriptDir, err)
+			failed = append(failed, "script directory "+cli.ScriptDir)
+		}
 		env := scriptEnv(tun, prevPort)
-		for _, script := range cli.Scripts {
+		for _, script := range scripts {
 			if err := runScript(script, env); err != nil {
 				log.Printf("Script %s failed: %v", script, err)
 				failed = append(failed, "script "+script)
