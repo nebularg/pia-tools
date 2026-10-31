@@ -24,7 +24,7 @@ type CLI struct {
 
 	Refresh bool `short:"r" name:"refresh" help:"Refresh cached port assignment rather than requesting a new one."`
 
-	ScriptDir string `short:"s" name:"script-dir" env:"PORTFORWARD_SCRIPT_DIR" type:"existingdir" help:"Directory of executables to run, in name order, after the port is bound, with tunnel and port forward details in PIA_* environment variables."`
+	ScriptDir string `short:"s" name:"script-dir" env:"PF_SCRIPT_DIR" type:"existingdir" help:"Directory of executables to run, in name order, after the port is bound, with tunnel and port forward details in PIA_* environment variables."`
 
 	CacheDir string `short:"c" aliases:"cachedir" default:"/var/cache/pia" help:"Directory in which to store security-sensitive cache files."`
 }

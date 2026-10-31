@@ -582,7 +582,7 @@ VPN.
        sudo env GOBIN=/usr/local/bin go install github.com/jdelkins/pia-tools/cmd/pia-portforward@latest
 
 2. To do something with the forwarded port, such as telling a bittorrent
-   client about it, set `PORTFORWARD_SCRIPT_DIR` in `/etc/pia.conf` to a
+   client about it, set `PF_SCRIPT_DIR` in `/etc/pia.conf` to a
    directory of scripts to run whenever the port is set or refreshed (see
    [`pia-portforward`](#pia-portforward) below).
 
@@ -749,7 +749,7 @@ This command must be executed after the tunnel is active.
 | `--password string`              | PIA_PASSWORD           | _none_  | ibid                                                                    |
 | `--if-name string`               | _n/a_                  | `pia`   | Interface name associated with the active PIA tunnel                    |
 | `--refresh`                      | _n/a_                  | _unset_ | Don't get a new port forwarding assignment, just refresh the active one |
-| `--script-dir path`, `-s path`   | PORTFORWARD_SCRIPT_DIR | _none_  | Directory of executables to run after the port is bound (see below)     |
+| `--script-dir path`, `-s path`   | PF_SCRIPT_DIR          | _none_  | Directory of executables to run after the port is bound (see below)     |
 
 #### Example Usage
 
@@ -808,7 +808,7 @@ script failed. After a failure, `--refresh` requests a new port, as there is no
 longer one to refresh.
 
 ```sh
-pia-portforward --if-name pia --script-dir /usr/local/lib/pia/portforward.d
+pia-portforward --if-name pia --script-dir /usr/local/lib/pia-pf
 ```
 
 #### NixOS: Running CLI without installing

@@ -60,7 +60,7 @@ Assumes:
 
 5. If you wish to run scripts when the forwarded port is set or refreshed
    (e.g. to tell a bittorrent client about it), uncomment the
-   `PORTFORWARD_SCRIPT_DIR=` line in `/etc/pia.conf`. Scripts in the directory
+   `PF_SCRIPT_DIR=` line in `/etc/pia.conf`. Scripts in the directory
    must be executable and owned by root.
 
 6. Enable the timers. Use whatever interface name you want in place of `wgpia0`.
