@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/alecthomas/kong"
@@ -83,7 +84,8 @@ func scriptEnv(tun *pia.Tunnel, prevPort int) []string {
 }
 
 // listScripts returns the executable files in dir, sorted by name. Hidden
-// files, directories and non-executable files are skipped.
+// files, directories, non-executable files and files not owned by root are
+// skipped.
 func listScripts(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -106,6 +108,10 @@ func listScripts(dir string) ([]string, error) {
 		}
 		if info.Mode().Perm()&0o111 == 0 {
 			log.Printf("Skipping %s: not executable", path)
+			continue
+		}
+		if info.Sys().(*syscall.Stat_t).Uid != 0 {
+			log.Printf("Skipping %s: not owned by root", path)
 			continue
 		}
 		scripts = append(scripts, path)

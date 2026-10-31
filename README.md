@@ -846,7 +846,8 @@ the directory is run, in name order, after the port is bound and any bittorrent
 clients have been notified. Files are executed directly, so shell scripts need a
 shebang line (e.g. `#!/bin/bash`). Hidden files, subdirectories and files without
 the executable bit are skipped, so `chmod +x` a script to enable it and
-`chmod -x` to disable it. Scripts inherit `pia-portforward`'s environment, plus
+`chmod -x` to disable it. Files not owned by root are also skipped (for symlinks,
+the target's owner is checked). Scripts inherit `pia-portforward`'s environment, plus
 the following variables:
 
 | Variable               | Meaning                                                                             |
