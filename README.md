@@ -774,22 +774,23 @@ pia-portforward --if-name pia --refresh
 ```
 
 __Run custom scripts.__ With `--script-dir` (or `-s`), each executable file in
-the directory is run, in name order, after the port is bound. Files are executed
-directly, so shell scripts need a
-shebang line (e.g. `#!/bin/bash`). Hidden files, subdirectories and files without
-the executable bit are skipped, so `chmod +x` a script to enable it and
-`chmod -x` to disable it. Files not owned by root are also skipped (for symlinks,
-the target's owner is checked). Scripts inherit `pia-portforward`'s environment, plus
-the following variables:
+the directory is run, in name order, after the port is bound. Scripts are run
+even if the port could not be obtained or bound, in which case `PIA_PF_PORT` is
+`0`. Files are executed directly, so shell scripts need a shebang line (e.g.
+`#!/bin/bash`). Hidden files, subdirectories and files without the executable
+bit are skipped, so `chmod +x` a script to enable it and `chmod -x` to disable
+it. Files not owned by root are also skipped (for symlinks, the target's owner
+is checked). Scripts inherit `pia-portforward`'s environment, plus the following
+variables:
 
 | Variable               | Meaning                                                                             |
 |------------------------|-------------------------------------------------------------------------------------|
-| `PIA_PF_PORT`          | The forwarded port                                                                  |
+| `PIA_PF_PORT`          | The forwarded port; `0` if port forwarding failed                                   |
 | `PIA_PF_PORT_PREVIOUS` | The forwarded port from the previous run; empty if none (e.g. after a tunnel reset) |
 | `PIA_PF_PORT_CHANGED`  | `1` if the port changed since the previous run; empty if unchanged                  |
 | `PIA_PF_EXPIRY`        | Port assignment expiry (RFC 3339)                                                   |
 | `PIA_INTERFACE`        | WireGuard interface name                                                            |
-| `PIA_STATUS`           | Status of the last PIA API call                                                     |
+| `PIA_STATUS`           | Status of the last PIA API call; `ERROR` if port forwarding failed                  |
 | `PIA_MESSAGE`          | Message from the last PIA API call                                                  |
 | `PIA_REGION_ID`        | Region identifier                                                                   |
 | `PIA_REGION_NAME`      | Region display name                                                                 |
@@ -803,7 +804,9 @@ the following variables:
 
 If a script fails to run or exits with a non-zero status, the failure is logged
 and `pia-portforward` carries on with the remaining scripts. Once they have all
-run, `pia-portforward` exits with a non-zero status if any script failed.
+run, `pia-portforward` exits with a non-zero status if port forwarding or any
+script failed. After a failure, `--refresh` requests a new port, as there is no
+longer one to refresh.
 
 ```sh
 pia-portforward --if-name pia --script-dir /usr/local/lib/pia/portforward.d

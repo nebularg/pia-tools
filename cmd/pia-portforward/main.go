@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -147,46 +148,70 @@ func runScript(path string, env []string) error {
 	return cmd.Run()
 }
 
-func main() {
-	var cli CLI
-	kong.Parse(&cli, kong.Name("pia-portforward"))
-
-	// grab the cached tunnel info
-	tun, err := pia.ReadCache(cli.CacheDir, cli.IfName)
-	if err != nil {
-		log.Panicf("Could not read cache: %v", err)
-	}
-	prevPort := tun.PFSig.Port
-	defer func() {
-		if err := tun.SaveCache(cli.CacheDir); err != nil {
-			log.Panicf("Could not save cache: %v", err)
-		}
-	}()
-
+// forwardPort ensures we have a valid token, requests a new port forward
+// assignment unless refresh is set and there is one to refresh, and binds it.
+func forwardPort(tun *pia.Tunnel, username, password string, refresh bool) error {
 	// ensure our token is still valid, if not grab a new one
 	if !tun.Token.Valid() {
-		if cli.Username == "" || cli.Password == "" {
-			log.Panicf("Token expired and user/pass not provided")
+		if username == "" || password == "" {
+			return errors.New("token expired and user/pass not provided")
 		}
-		if err := tun.NewToken(cli.Username, cli.Password); err != nil {
-			log.Panicf("Could not refresh expired token: %v", err)
+		if err := tun.NewToken(username, password); err != nil {
+			return fmt.Errorf("could not refresh expired token: %w", err)
 		}
 	}
 
-	// request new port unless --refresh
-	if !cli.Refresh {
+	// request new port unless refresh, or if a previous failure cleared it
+	if !refresh || tun.PFSig.Signature == "" {
 		if err := tun.NewPFSig(); err != nil {
-			log.Panicf("Could not get port forwarding signature: %v", err)
+			return fmt.Errorf("could not get port forwarding signature: %w", err)
 		}
 	}
 
 	// bind the port to our virtual IP. If already active, effectuates the refresh
 	if err := tun.BindPF(); err != nil {
-		log.Panicf("Could not bind port forwarding assignment: %v", err)
+		return fmt.Errorf("could not bind port forwarding assignment: %w", err)
+	}
+	return nil
+}
+
+func main() {
+	var cli CLI
+	kong.Parse(&cli, kong.Name("pia-portforward"))
+
+	// failures are reported but do not stop the rest, so that user scripts
+	// always run
+	var failed []string
+
+	// grab the cached tunnel info. Without it there is no port to forward and
+	// nothing to cache, but scripts are still run, with port 0
+	tun, err := pia.ReadCache(cli.CacheDir, cli.IfName)
+	cached := err == nil
+	if !cached {
+		log.Printf("Could not read cache: %v", err)
+		failed = append(failed, "cache")
+		tun = &pia.Tunnel{Interface: cli.IfName, Status: "ERROR", Message: err.Error()}
+	}
+	prevPort := tun.PFSig.Port
+
+	if cached {
+		// on failure, cache port 0, so that scripts see the port change to 0
+		// and then no further change while failures continue
+		if err := forwardPort(tun, cli.Username, cli.Password, cli.Refresh); err != nil {
+			log.Printf("Could not forward port: %v", err)
+			failed = append(failed, "port forwarding")
+			tun.PFSig = pia.PortForwardSig{}
+			tun.Status = "ERROR"
+			tun.Message = err.Error()
+		}
+		// save before running scripts, so a script that hangs can't lose it
+		if err := tun.SaveCache(cli.CacheDir); err != nil {
+			log.Printf("Could not save cache: %v", err)
+			failed = append(failed, "cache")
+		}
 	}
 
 	// run user scripts; a failure is reported but does not stop the rest
-	var failed []string
 	if cli.ScriptDir != "" {
 		scripts, err := listScripts(cli.ScriptDir)
 		if err != nil {
@@ -198,11 +223,12 @@ func main() {
 			log.Printf("Could not prepare script environment: %v", err)
 			failed = append(failed, "script environment")
 			scripts = nil
-		}
-		for _, script := range scripts {
-			if err := runScript(script, env); err != nil {
-				log.Printf("Script %s failed: %v", script, err)
-				failed = append(failed, "script "+script)
+		} else {
+			for _, script := range scripts {
+				if err := runScript(script, env); err != nil {
+					log.Printf("Script %s failed: %v", script, err)
+					failed = append(failed, "script "+script)
+				}
 			}
 		}
 	}
@@ -210,6 +236,6 @@ func main() {
 	fmt.Printf("%s: %s (Port = %d)\n", tun.Status, tun.Message, tun.PFSig.Port)
 
 	if len(failed) > 0 {
-		log.Panicf("Failed: %s", strings.Join(failed, ", "))
+		log.Fatalf("Failed: %s", strings.Join(failed, ", "))
 	}
 }
