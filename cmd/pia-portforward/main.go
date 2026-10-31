@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,9 +14,6 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/jdelkins/pia-tools/internal/pia"
-	"github.com/jdelkins/pia-tools/internal/qbittorrent"
-	"github.com/jdelkins/pia-tools/internal/rtorrent"
-	"github.com/jdelkins/pia-tools/internal/transmission"
 )
 
 type CLI struct {
@@ -26,15 +22,6 @@ type CLI struct {
 	Password string `short:"p" name:"password" env:"PIA_PASSWORD" help:"PIA password (required if token expired)."`
 
 	Refresh bool `short:"r" name:"refresh" help:"Refresh cached port assignment rather than requesting a new one."`
-
-	Rtorrent      string `name:"rtorrent" env:"RTORRENT" help:"XML-RPC URL of rtorrent server (for port forward notifications)."`
-	Transmission  string `name:"transmission" env:"TRANSMISSION" help:"URL of transmission server RPC endpoint (for port forward notifications)."`
-	TransUser     string `name:"transmission-username" env:"TRANSMISSION_USERNAME" help:"Transmission server username."`
-	TransPassword string `name:"transmission-password" env:"TRANSMISSION_PASSWORD" help:"Transmission server password."`
-	Qbittorrent   string `name:"qbittorrent" env:"QBITTORRENT" help:"URL of qbittorrent WebUI API endpoint."`
-	QbtApiKey     string `name:"qbittorrent-apikey" env:"QBITTORRENT_APIKEY" help:"The qbittorrent WebUI API key."`
-	QbtUser       string `name:"qbittorrent-username" env:"QBITTORRENT_USERNAME" help:"The qbittorrent WebUI username."`
-	QbtPassword   string `name:"qbittorrent-password" env:"QBITTORRENT_PASSWORD" help:"The qbittorrent WebUI password."`
 
 	ScriptDir string `short:"s" name:"script-dir" env:"PORTFORWARD_SCRIPT_DIR" type:"existingdir" help:"Directory of executables to run, in name order, after the port is bound, with tunnel and port forward details in PIA_* environment variables."`
 
@@ -160,59 +147,6 @@ func runScript(path string, env []string) error {
 	return cmd.Run()
 }
 
-// notifyRtorrent sets rtorrent's listening port, returning the port rtorrent
-// reports afterwards.
-func notifyRtorrent(url string, port int) (int, error) {
-	if err := rtorrent.Notify(url, port); err != nil {
-		return 0, fmt.Errorf("could not notify rtorrent (at %s) of assigned port: %w", url, err)
-	}
-	port, err := rtorrent.Confirm(url)
-	if err != nil {
-		return 0, fmt.Errorf("could not verify rtorrent port: %w", err)
-	}
-	return port, nil
-}
-
-// notifyTransmission sets transmission's peer port, returning the port
-// transmission reports afterwards.
-func notifyTransmission(url, user, password string, port int) (int, error) {
-	if err := transmission.Notify(url, user, password, port); err != nil {
-		return 0, fmt.Errorf("could not notify transmission (at %s) of assigned port: %w", url, err)
-	}
-	port, err := transmission.Confirm(url, user, password)
-	if err != nil {
-		return 0, fmt.Errorf("could not verify transmission port: %w", err)
-	}
-	return port, nil
-}
-
-// notifyQbittorrent sets qbittorrent's listening port, returning the port
-// qbittorrent reports afterwards. The api key is preferred if set; otherwise
-// a session is opened with user/password, if given.
-func notifyQbittorrent(url, apiKey, user, password string, port int) (int, error) {
-	var sessionCookie *http.Cookie
-	if apiKey == "" && user != "" && password != "" {
-		cookie, err := qbittorrent.Login(url, user, password)
-		if err != nil {
-			return 0, fmt.Errorf("could not login to qbittorrent (at %s): %w", url, err)
-		}
-		sessionCookie = cookie
-		defer func() {
-			if err := qbittorrent.Logout(url, sessionCookie); err != nil {
-				log.Printf("Failed to logout of qbittorrent: %v", err)
-			}
-		}()
-	}
-	if err := qbittorrent.Notify(url, apiKey, sessionCookie, port); err != nil {
-		return 0, fmt.Errorf("could not notify qbittorrent (at %s) of assigned port: %w", url, err)
-	}
-	port, err := qbittorrent.Confirm(url, apiKey, sessionCookie)
-	if err != nil {
-		return 0, fmt.Errorf("could not verify qbittorrent port: %w", err)
-	}
-	return port, nil
-}
-
 func main() {
 	var cli CLI
 	kong.Parse(&cli, kong.Name("pia-portforward"))
@@ -251,34 +185,8 @@ func main() {
 		log.Panicf("Could not bind port forwarding assignment: %v", err)
 	}
 
-	// notify torrent clients and run user scripts; a failure is reported but
-	// does not stop the rest
+	// run user scripts; a failure is reported but does not stop the rest
 	var failed []string
-	checkClient := func(client string, port int, err error) {
-		if err == nil && port != tun.PFSig.Port {
-			err = fmt.Errorf("PIA assigned us port %d, but %s reports port is %d", tun.PFSig.Port, client, port)
-		}
-		if err != nil {
-			log.Printf("Could not update %s: %v", client, err)
-			failed = append(failed, client)
-		}
-	}
-
-	if cli.Rtorrent != "" {
-		port, err := notifyRtorrent(cli.Rtorrent, tun.PFSig.Port)
-		checkClient("rtorrent", port, err)
-	}
-
-	if cli.Transmission != "" {
-		port, err := notifyTransmission(cli.Transmission, cli.TransUser, cli.TransPassword, tun.PFSig.Port)
-		checkClient("transmission", port, err)
-	}
-
-	if cli.Qbittorrent != "" {
-		port, err := notifyQbittorrent(cli.Qbittorrent, cli.QbtApiKey, cli.QbtUser, cli.QbtPassword, tun.PFSig.Port)
-		checkClient("qbittorrent", port, err)
-	}
-
 	if cli.ScriptDir != "" {
 		scripts, err := listScripts(cli.ScriptDir)
 		if err != nil {

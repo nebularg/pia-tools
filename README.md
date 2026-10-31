@@ -3,9 +3,9 @@
 A suite of tools for establishing a [WireGuard][wireguard] tunnel to [Private
 Internet Access][PIA] on Linux using [systemd-networkd][], based on [PIA’s REST
 API](https://github.com/pia-foss/manual-connections). It can also manage PIA’s
-port forwarding feature and optionally notify rTorrent, Transmission, or qBittorrent
-(via RPC) of the assigned port; this will allow receiving incoming BitTorrent peer
-connections over the VPN.
+port forwarding feature and run your own scripts with the assigned port, e.g. to
+tell a BitTorrent client about it; this will allow receiving incoming BitTorrent
+peer connections over the VPN.
 
 A helper utility, `pia-listregions`, will show you, on your terminal, a ranked
 (by ping time) list of PIA servers, with some possibly-salient info about them,
@@ -177,16 +177,14 @@ example](#nixos-detailed-example-configuration), which follows.
 | `services.pia-tools.cacheDir`            | `path`                              | Where to store tunnel descriptions in JSON format, containing private keys.                                                                                                                                                                                  |
 | `services.pia-tools.ifname`              | `string`                            | Name of PIA WireGuard network interface.                                                                                                                                                                                                                     |
 | `services.pia-tools.region`              | `string`                            | Region to connect to, or `auto` by default.                                                                                                                                                                                                                  |
-| `services.pia-tools.rTorrentUrl`         | `null or string`                    | URL to rTorrent XML-RPC endpoint.                                                                                                                                                                                                                            |
-| `services.pia-tools.transmissionUrl`     | `null or string`                    | Transmission RPC endpoint URL. If your Transmission server requires a username and password, set them in `config.services.pia-tools.envFile` with `TRANSMISSION_USERNAME` and `TRANSMISSION_PASSWORD`.                                                       |
-| `services.pia-tools.qBittorrentUrl`      | `null or string`                    | Qbittorrent WebUI endpoint URL. If your Qbittorrent server requires auth, set the username and password or alternatively the api key in `config.services.pia-tools.envFile` with `QBITTORRENT_USERNAME` and `QBITTORRENT_PASSWORD` or `QBITTORRENT_APIKEY` . |
-| `services.pia-tools.envFile`             | `path`                              | **Required.** Path to a file that sets environment variables used to set up the tunnel device. Recognized variables include `PIA_USERNAME` and `PIA_PASSWORD` (required), plus optional bittorrent server auth material, as noted above.                     |
+| `services.pia-tools.envFile`             | `path`                              | **Required.** Path to a file that sets environment variables used to set up the tunnel device. Recognized variables include `PIA_USERNAME` and `PIA_PASSWORD` (required).                                                                                    |
 | `services.pia-tools.resetServiceName`    | `string`                            | Name of systemd service for pia-tools tunnel reset.                                                                                                                                                                                                          |
 | `services.pia-tools.resetTimerConfig`    | `null or systemd timerConfig attrs` | Timer defining frequency of resetting the tunnel. Set to `null` to disable.                                                                                                                                                                                  |
 | `services.pia-tools.refreshServiceName`  | `string`                            | Name of systemd service for pia-tools tunnel port forwarding refresh (only relevant if portForwarding is enabled).                                                                                                                                           |
 | `services.pia-tools.refreshTimerConfig`  | `null or systemd timerConfig attrs` | Timer defining frequency of refreshing the tunnel's port forwarding assignment. Set to `null` to disable.                                                                                                                                                    |
 | `services.pia-tools.whitelistScript`     | `null or path`                      | Script to run when the WireGuard endpoint is established (e.g., add the endpoint IP to a firewall passlist). The script is called with the IP as the only argument. Set to `null` to ignore.                                                                 |
 | `services.pia-tools.portForwarding`      | `bool`                              | Whether to request a port forwarding assignment from PIA.                                                                                                                                                                                                    |
+| `services.pia-tools.scriptDir`           | `null or path`                      | Directory of executables to run whenever the forwarded port is set or refreshed, as with `pia-portforward --script-dir` (see below). Files not owned by root are skipped. Ignored unless `portForwarding` is true.                                           |
 | `services.pia-tools.netdevTemplateFile`  | `path`                              | `systemd.netdev` template used to generate the actual `.netdev`.                                                                                                                                                                                             |
 | `services.pia-tools.networkTemplateFile` | `path`                              | `systemd.network` template used to generate the actual `.network`.                                                                                                                                                                                           |
 | `services.pia-tools.netdevFile`          | `path`                              | Path at which to install the generated `.netdev` file.                                                                                                                                                                                                       |
@@ -412,9 +410,6 @@ outputs =
               # envFile needs to contain
               #   PIA_USERNAME=<pia username>
               #   PIA_PASSWORD=<pia password>
-              # and, if needed:
-              #   TRANSMISSION_USERNAME=<transmission username>
-              #   TRANSMISSION_PASSWORD=<transmission password>
               # You can put this file in place by hand, or use something like
               # sops-nix to generate it based on encrypted secrets stored in the
               # flake repo.
@@ -423,11 +418,6 @@ outputs =
               # If true, request and maintain a port forwarding
               # assignment after successfully establishing a tunnel.
               portForwarding = true;
-
-              # RPC endpoint of transmission server. Usually the web
-              # endpoint with /rpc added at the end.
-              # Ignored unless portForwarding = true
-              transmissionUrl = "http://${transmissionIp}:9091/rpc";
 
               # rotate the tunnel daily at 5:15 am
               resetTimerConfig.OnCalendar = "*-*-* 05:15:00";
@@ -591,39 +581,16 @@ VPN.
 
        sudo env GOBIN=/usr/local/bin go install github.com/jdelkins/pia-tools/cmd/pia-portforward@latest
 
-2. If you run a bittorrent server on your LAN (or on the router itself),
-   you can edit `/etc/pia.conf` to provide some additional details.
+2. To do something with the forwarded port, such as telling a bittorrent
+   client about it, set `PORTFORWARD_SCRIPT_DIR` in `/etc/pia.conf` to a
+   directory of scripts to run whenever the port is set or refreshed (see
+   [`pia-portforward`](#pia-portforward) below).
 
        sudoedit /etc/pia.conf
 
-   For [transmission][], uncomment and set the variables
-
-   - `TRANSMISSION`: set to the server's web interface URL, with `/rpc` at the end, e.g. `http://192.168.100.100:9091/rpc`
-   - `TRANSMISSION_USERNAME`: if web access control is configured on transmission server, set to the username
-   - `TRANSMISSION_PASSWORD`: if web access control is configured on transmission server, set to the password
-
-    For [rtorrent][], you will need a reverse proxy (lighttpd,
-    nginx, etc.) to front the SCGI interface via XMLRPC. See
-    [here](https://github.com/rakshasa/rtorrent-doc/blob/master/RPC-Setup-XMLRPC.md)
-    for instructions. These instructions indicate configuring the standard
-    location `/RPC2` for the XMLRPC interface. Please follow this convention.
-    Once that is up and running, you should set the `RTORRENT` variable to the
-    url of this reverse proxy server. Leave off the `/RPC2` part of the URL;
-    the tool adds this automatically.
-    - `RTORRENT`: set to reverse proxy URL, after configuring the `/RPC2` endpoint. e.g. `http://192.168.100.101:5000`
-
-    For [qbittorrent][], uncomment and set the variables
-    - `QBITTORRENT`: set to the server's web interface URL, with `/api/v2` (that's the default) at the end,
-      e.g. `http://192.168.100.100:8080/api/v2`
-    - `QBITTORRENT_USERNAME` and `QBITTORRENT_PASSWORD` or alternatively `QBITTORRENT_APIKEY`: if auth is configured for
-      the qbittorrent server, set the relevant values.
-
-    Other bittorrent servers are not supported currently, sorry.
-
-3.  If you don't have a bittorrent server running (or just don't want
-    to use the forwarded port for that), you're on your own to parse
-    `/var/cache/pia/pia.json` to obtain the assigned port and do something with
-    it. For example, to forward the port to an internal web server, you could:
+   Alternatively, you can parse `/var/cache/pia/pia.json` to obtain the
+   assigned port. For example, to forward the port to an internal web server,
+   you could:
 
    ```sh
    IF=pia
@@ -636,11 +603,11 @@ VPN.
    nft add rule ip nat pia_portforward tcp dport $PORT dnat to $WEBSERVER
    ```
 
-4. Enable the timer to refresh the port forwarding assignment every 15 minutes
+3. Enable the timer to refresh the port forwarding assignment every 15 minutes
 
        sudo systemctl enable --now pia-pf-refresh@pia.timer
 
-5. To enable the port forwarding now, just re-build the tunnel.
+4. To enable the port forwarding now, just re-build the tunnel.
 
        sudo systemctl start pia-reset-tunnel@pia.service
 
@@ -769,8 +736,8 @@ networkctl up '<ifname>'
 #### Description
 
 `pia-portforward` requests and maintains a forwarded port from the active
-PIA tunnel. It retrieves the assigned port and optionally updates downstream
-services such as rTorrent or Transmission.
+PIA tunnel. It retrieves the assigned port and optionally runs user scripts
+with it.
 
 This command must be executed after the tunnel is active.
 
@@ -781,14 +748,6 @@ This command must be executed after the tunnel is active.
 | `--username string`              | PIA_USERNAME           | _none_  | Used to get a new authentication token, if expired.                     |
 | `--password string`              | PIA_PASSWORD           | _none_  | ibid                                                                    |
 | `--if-name string`               | _n/a_                  | `pia`   | Interface name associated with the active PIA tunnel                    |
-| `--rtorrent string`              | RTORRENT               | _none_  | rTorrent XML-RPC endpoint (e.g., http://localhost:5000)                 |
-| `--transmission string`          | TRANSMISSION           | _none_  | Transmission RPC endpoint (e.g., http://localhost:9091/rpc)             |
-| `--transmission-username string` | TRANSMISSION_USERNAME  | _none_  | Transmission RPC username (if required)                                 |
-| `--transmission-password string` | TRANSMISSION_PASSWORD  | _none_  | Transmission RPC password (if required)                                 |
-| `--qbittorrent string`           | QBITTORRENT            | _none_  | Qbittorrent WebUI endpoint (if required)                                |
-| `--qbittorrent-username string`  | QBITTORRENT_USERNAME   | _none_  | Qbittorrent WebUI username key (if required)                            |
-| `--qbittorrent-password string`  | QBITTORRENT_PASSWORD   | _none_  | Qbittorrent WebUI password key (if required)                            |
-| `--qbittorrent-apikey string`    | QBITTORRENT_APIKEY     | _none_  | Qbittorrent WebUI api key (if required)                                 |
 | `--refresh`                      | _n/a_                  | _unset_ | Don't get a new port forwarding assignment, just refresh the active one |
 | `--script-dir path`, `-s path`   | PORTFORWARD_SCRIPT_DIR | _none_  | Directory of executables to run after the port is bound (see below)     |
 
@@ -798,33 +757,6 @@ __Basic port forward retrieval.__ Will obtain a forwarding port, store it in the
 cache file, but do nothing further with it.
 
 ```sh
-pia-portforward --if-name pia
-```
-
-__Update rTorrent with the forwarded port.__ This will obtain a forwarding port
-and communicate it to an rtorrent instance running locally on the router. If a
-forwarding port is already active, this will grab a new (and likely different)
-port.
-
-```sh
-pia-portforward \
-  --if-name pia \
-  --rtorrent http://127.0.0.1:5000
-```
-
-__Update Transmission with authentication.__ This will obtain a forwarding port
-and communicate it to a transmission instance running at ip 192.168.77.77. This
-example uses environment variables for the transmission related parameters, but
-you could also use CLI flags. Uses the cached PIA token: if you just set up the
-tunnel successfully, you shouldn't need the PIA username/password; the cached
-token should still be valid. You can provide the PIA credentials if you want to
-be sure.
-
-```sh
-export TRANSMISSION=http://192.168.77.77:9091/rpc
-export TRANSMISSION_USERNAME=user
-export TRANSMISSION_PASSWORD=pass
-
 pia-portforward --if-name pia
 ```
 
@@ -842,8 +774,8 @@ pia-portforward --if-name pia --refresh
 ```
 
 __Run custom scripts.__ With `--script-dir` (or `-s`), each executable file in
-the directory is run, in name order, after the port is bound and any bittorrent
-clients have been notified. Files are executed directly, so shell scripts need a
+the directory is run, in name order, after the port is bound. Files are executed
+directly, so shell scripts need a
 shebang line (e.g. `#!/bin/bash`). Hidden files, subdirectories and files without
 the executable bit are skipped, so `chmod +x` a script to enable it and
 `chmod -x` to disable it. Files not owned by root are also skipped (for symlinks,
@@ -870,9 +802,8 @@ the following variables:
 | `PIA_JSON`             | The full tunnel description as a JSON object, excluding keys and secrets            |
 
 If a script fails to run or exits with a non-zero status, the failure is logged
-and `pia-portforward` carries on with the remaining scripts. Bittorrent client
-notifications are handled the same way. Once everything has run,
-`pia-portforward` exits with a non-zero status if any client or script failed.
+and `pia-portforward` carries on with the remaining scripts. Once they have all
+run, `pia-portforward` exits with a non-zero status if any script failed.
 
 ```sh
 pia-portforward --if-name pia --script-dir /usr/local/lib/pia/portforward.d
@@ -922,8 +853,5 @@ enabled with a sysctl command like the following:
 [systemd-networkd]: https://www.freedesktop.org/software/systemd/man/systemd.network.html
 [wireguard]: https://www.wireguard.com/
 [PIA]: https://www.privateinternetaccess.com/
-[rtorrent]: https://github.com/rakshasa/rtorrent
-[transmission]: https://transmissionbt.com/
-[qbittorrent]: https://www.qbittorrent.org/
 [sprig]: http://masterminds.github.io/sprig/
 [text-template]: https://pkg.go.dev/text/template

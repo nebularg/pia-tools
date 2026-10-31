@@ -21,11 +21,9 @@ let
 
   getIp = ''${pkgs.jq}/bin/jq -r .server_ip <${cacheFile} | ${pkgs.coreutils}/bin/tr -d \\n'';
 
-  serviceEnvFile = pkgs.writeText "service_params.sh" ''
-    ${lib.optionalString (cfg.transmissionUrl != null) "TRANSMISSION=${cfg.transmissionUrl}"}
-    ${lib.optionalString (cfg.rTorrentUrl != null) "RTORRENT=${cfg.rTorrentUrl}"}
-    ${lib.optionalString (cfg.qBittorrentUrl != null) "QBITTORRENT=${cfg.qBittorrentUrl}"}
-  '';
+  portforwardArgs =
+    "--cache-dir ${cfg.cacheDir} --if-name ${cfg.ifname}"
+    + lib.optionalString (cfg.scriptDir != null) " --script-dir ${cfg.scriptDir}";
 in
 {
   options.services.pia-tools = {
@@ -69,35 +67,6 @@ in
       example = "ca_toronto";
     };
 
-    rTorrentUrl = mkOption {
-      description = "URL to rTorrent SCGI endpoint";
-      type = types.nullOr types.str;
-      default = null;
-      example = "https://rtorrent.local";
-    };
-
-    transmissionUrl = mkOption {
-      description = ''
-        Transmission RPC endpoint URL. If your transmission server requires
-        a username and password, set them in config.services.pia-tools.envFile, with
-        the variables TRANSMISSION_USERNAME and TRANSMISSION_PASSWORD.
-      '';
-      type = types.nullOr types.str;
-      default = null;
-      example = "http://192.168.100.100:9091/rpc/";
-    };
-
-    qBittorrentUrl = mkOption {
-      description = ''
-        Qbittorrent WebUI endpoint URL. If your qbittorrent WebUI requires auth,
-        you can set the username and password, or the api key in config.services.pia-tools.envFile,
-        with the variables QBITTORRENT_USERNAME and QBITTORRENT_PASSWORD or QBITTORRENT_APIKEY.
-      '';
-      type = types.nullOr types.str;
-      default = null;
-      example = "http://192.168.100.100:8080/api/v2/";
-    };
-
     envFile = mkOption {
       description = ''
         Required. Path to file setting environment variables to be used
@@ -107,14 +76,6 @@ in
 
            PIA_USERNAME (required)
            PIA_PASSWORD (required)
-
-        Optional, if needed:
-
-           TRANSMISSION_USERNAME
-           TRANSMISSION_PASSWORD
-           QBITTORRENT_USERNAME
-           QBITTORRENT_PASSWORD
-           QBITTORRENT_APIKEY
       '';
       type = types.path;
     };
@@ -168,6 +129,24 @@ in
       description = "whether to request a port forwarding assignment from PIA.";
       type = types.bool;
       default = false;
+    };
+
+    scriptDir = mkOption {
+      description = ''
+        Directory of executables to run, in name order, whenever the port forwarding
+        assignment is set or refreshed, with the port and tunnel details in PIA_*
+        environment variables. Files not owned by root are skipped. Set to null to
+        run no scripts. Ignored unless portForwarding is true.
+      '';
+      type = with types; nullOr path;
+      default = null;
+      example = lib.literalExpression ''
+        pkgs.linkFarm "pia-portforward.d" {
+          "50-notify" = pkgs.writeShellScript "notify" '''
+            echo "forwarded port is $PIA_PF_PORT"
+          ''';
+        }
+      '';
     };
 
     netdevTemplateFile = mkOption {
@@ -228,10 +207,7 @@ in
         ];
         ReadOnlyPaths = [ "/nix/store" ];
         # username and password are passed in via environment variables PIA_USERNAME and PIA_PASSWORD, respectively
-        EnvironmentFile = [
-          serviceEnvFile
-          cfg.envFile
-        ];
+        EnvironmentFile = [ cfg.envFile ];
         UMask = "0002";
         CapabilityBoundingSet = [
           "CAP_NET_ADMIN"
@@ -296,7 +272,7 @@ in
         ]
         ++ lib.optionals (cfg.portForwarding) [
           "${pkgs.coreutils}/bin/sleep 10"
-          "-${cfg.package}/bin/pia-portforward --cache-dir ${cfg.cacheDir} --if-name ${cfg.ifname}"
+          "-${cfg.package}/bin/pia-portforward ${portforwardArgs}"
         ];
       };
     };
@@ -316,11 +292,8 @@ in
       serviceConfig = {
         User = cfg.user;
         Type = "oneshot";
-        EnvironmentFile = [
-          serviceEnvFile
-          cfg.envFile
-        ];
-        ExecStart = "${cfg.package}/bin/pia-portforward --cache-dir ${cfg.cacheDir} --if-name ${cfg.ifname} --refresh";
+        EnvironmentFile = [ cfg.envFile ];
+        ExecStart = "${cfg.package}/bin/pia-portforward ${portforwardArgs} --refresh";
       }
       // lib.attrsets.optionalAttrs (cfg.whitelistScript != null) {
         ExecStartPost = ''+${pkgs.bash}/bin/bash -c '${cfg.whitelistScript} "$(${getIp})"' '';
