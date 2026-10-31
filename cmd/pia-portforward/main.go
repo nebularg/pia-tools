@@ -70,6 +70,9 @@ func scriptEnv(tun *pia.Tunnel, prevPort int) ([]string, error) {
 		// {"PIA_PF_SIGNATURE", tun.PFSig.Signature},
 		// {"PIA_PF_PAYLOAD", tun.PFSig.Payload},
 		{"PIA_JSON", tunJSON},
+		// blank the credentials, which scripts would otherwise inherit
+		{"PIA_USERNAME", ""},
+		{"PIA_PASSWORD", ""},
 	}
 	env := make([]string, len(vars))
 	for i, v := range vars {
