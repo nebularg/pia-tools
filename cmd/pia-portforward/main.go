@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -44,8 +45,13 @@ type CLI struct {
 // variable assignments, for consumption by user scripts. prevPort is the
 // forwarded port from the previous run (0 if none). PIA_PF_PORT_PREVIOUS is
 // empty if there was no previous port, and PIA_PF_PORT_CHANGED is empty if the
-// port did not change.
-func scriptEnv(tun *pia.Tunnel, prevPort int) []string {
+// port did not change. PIA_JSON holds the tunnel as JSON, minus keys and
+// secrets.
+func scriptEnv(tun *pia.Tunnel, prevPort int) ([]string, error) {
+	tunJSON, err := scriptJSON(tun)
+	if err != nil {
+		return nil, err
+	}
 	previous := ""
 	if prevPort != 0 {
 		previous = strconv.Itoa(prevPort)
@@ -75,12 +81,37 @@ func scriptEnv(tun *pia.Tunnel, prevPort int) []string {
 		{"PIA_PF_EXPIRY", tun.PFSig.Expiry.Format(time.RFC3339)},
 		// {"PIA_PF_SIGNATURE", tun.PFSig.Signature},
 		// {"PIA_PF_PAYLOAD", tun.PFSig.Payload},
+		{"PIA_JSON", tunJSON},
 	}
 	env := make([]string, len(vars))
 	for i, v := range vars {
 		env[i] = v.name + "=" + v.value
 	}
-	return env
+	return env, nil
+}
+
+// scriptJSON returns tun as JSON, with the fields that scriptEnv leaves out
+// removed, as well as the private key.
+func scriptJSON(tun *pia.Tunnel) (string, error) {
+	b, err := json.Marshal(tun)
+	if err != nil {
+		return "", err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return "", err
+	}
+	delete(m, "server_key")
+	delete(m, "peer_privkey")
+	delete(m, "peer_pubkey")
+	delete(m["token"].(map[string]any), "token")
+	delete(m["PFSig"].(map[string]any), "signature")
+	delete(m["PFSig"].(map[string]any), "payload")
+	b, err = json.Marshal(m)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 // listScripts returns the executable files in dir, sorted by name. Hidden
@@ -254,7 +285,12 @@ func main() {
 			log.Printf("Could not read script directory %s: %v", cli.ScriptDir, err)
 			failed = append(failed, "script directory "+cli.ScriptDir)
 		}
-		env := scriptEnv(tun, prevPort)
+		env, err := scriptEnv(tun, prevPort)
+		if err != nil {
+			log.Printf("Could not prepare script environment: %v", err)
+			failed = append(failed, "script environment")
+			scripts = nil
+		}
 		for _, script := range scripts {
 			if err := runScript(script, env); err != nil {
 				log.Printf("Script %s failed: %v", script, err)

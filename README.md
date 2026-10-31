@@ -867,6 +867,7 @@ the following variables:
 | `PIA_PEER_IP`          | Our IP inside the tunnel                                                            |
 | `PIA_DNS_SERVERS`      | Space-separated list of PIA DNS servers                                             |
 | `PIA_TOKEN_EXPIRY`     | Token expiry (RFC 3339)                                                             |
+| `PIA_JSON`             | The full tunnel description as a JSON object, excluding keys and secrets            |
 
 If a script fails to run or exits with a non-zero status, the failure is logged
 and `pia-portforward` carries on with the remaining scripts. Bittorrent client
