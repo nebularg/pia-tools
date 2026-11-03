@@ -151,6 +151,30 @@ func runScript(path string, env []string) error {
 	return cmd.Run()
 }
 
+// runScripts runs the executables in dir with the tunnel details in their
+// environment, returning a description of each failure. A script that fails
+// does not stop the rest.
+func runScripts(dir string, tun *pia.Tunnel, prevPort int) []string {
+	scripts, err := listScripts(dir)
+	if err != nil {
+		log.Printf("Could not read script directory %s: %v", dir, err)
+		return []string{"script directory " + dir}
+	}
+	env, err := scriptEnv(tun, prevPort)
+	if err != nil {
+		log.Printf("Could not prepare script environment: %v", err)
+		return []string{"script environment"}
+	}
+	var failed []string
+	for _, script := range scripts {
+		if err := runScript(script, env); err != nil {
+			log.Printf("Script %s failed: %v", script, err)
+			failed = append(failed, "script "+script)
+		}
+	}
+	return failed
+}
+
 // forwardPort ensures we have a valid token, requests a new port forward
 // assignment unless refresh is set and there is one to refresh, and binds it.
 func forwardPort(tun *pia.Tunnel, username, password string, refresh bool) error {
@@ -182,8 +206,6 @@ func main() {
 	var cli CLI
 	kong.Parse(&cli, kong.Name("pia-portforward"))
 
-	// failures are reported but do not stop the rest, so that user scripts
-	// always run
 	var failed []string
 
 	// grab the cached tunnel info. Without it there is no port to forward and
@@ -214,26 +236,9 @@ func main() {
 		}
 	}
 
-	// run user scripts; a failure is reported but does not stop the rest
+	// run user scripts
 	if cli.ScriptDir != "" {
-		scripts, err := listScripts(cli.ScriptDir)
-		if err != nil {
-			log.Printf("Could not read script directory %s: %v", cli.ScriptDir, err)
-			failed = append(failed, "script directory "+cli.ScriptDir)
-		}
-		env, err := scriptEnv(tun, prevPort)
-		if err != nil {
-			log.Printf("Could not prepare script environment: %v", err)
-			failed = append(failed, "script environment")
-			scripts = nil
-		} else {
-			for _, script := range scripts {
-				if err := runScript(script, env); err != nil {
-					log.Printf("Script %s failed: %v", script, err)
-					failed = append(failed, "script "+script)
-				}
-			}
-		}
+		failed = append(failed, runScripts(cli.ScriptDir, tun, prevPort)...)
 	}
 
 	fmt.Printf("%s: %s (Port = %d)\n", tun.Status, tun.Message, tun.PFSig.Port)
