@@ -106,9 +106,21 @@ func scriptJSON(tun *pia.Tunnel) (string, error) {
 }
 
 // listScripts returns the executable files in dir, sorted by name. Hidden
-// files, directories, non-executable files and files not owned by root are
-// skipped.
+// files, directories, non-executable files, and files not owned by root or
+// writable by group or others are skipped. dir itself must be owned by root
+// and not writable by group or others, since otherwise anyone who can write to
+// it could add a script.
 func listScripts(dir string) ([]string, error) {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return nil, err
+	}
+	if info.Sys().(*syscall.Stat_t).Uid != 0 {
+		return nil, errors.New("not owned by root")
+	}
+	if info.Mode().Perm()&0o022 != 0 {
+		return nil, errors.New("writable by group or others")
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -134,6 +146,10 @@ func listScripts(dir string) ([]string, error) {
 		}
 		if info.Sys().(*syscall.Stat_t).Uid != 0 {
 			log.Printf("Skipping %s: not owned by root", path)
+			continue
+		}
+		if info.Mode().Perm()&0o022 != 0 {
+			log.Printf("Skipping %s: writable by group or others", path)
 			continue
 		}
 		scripts = append(scripts, path)

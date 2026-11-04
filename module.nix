@@ -135,8 +135,10 @@ in
       description = ''
         Directory of executables to run, in name order, whenever the port forwarding
         assignment is set or refreshed, with the port and tunnel details in PIA_*
-        environment variables. Files not owned by root are skipped. Set to null to
-        run no scripts. Ignored unless portForwarding is true.
+        environment variables. Files not owned by root, or writable by group or
+        others, are skipped, and no scripts are run unless the directory is owned
+        by root and not writable by group or others. Set to null to run no
+        scripts. Ignored unless portForwarding is true.
       '';
       type = with types; nullOr path;
       default = null;

@@ -779,8 +779,10 @@ even if the port could not be obtained or bound, in which case `PIA_PF_PORT` is
 `0`. Files are executed directly, so shell scripts need a shebang line (e.g.
 `#!/bin/bash`). Hidden files, subdirectories and files without the executable
 bit are skipped, so `chmod +x` a script to enable it and `chmod -x` to disable
-it. Files not owned by root are also skipped (for symlinks, the target's owner
-is checked). The following environment variables are set for scripts:
+it. Files not owned by root, or writable by group or others, are also skipped
+(for symlinks, the target's owner and permissions are checked). The directory
+itself must be owned by root and not writable by group or others, or no scripts
+are run. The following environment variables are set for scripts:
 
 | Variable               | Meaning                                                                             |
 |------------------------|-------------------------------------------------------------------------------------|
