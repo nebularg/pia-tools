@@ -36,8 +36,8 @@ experimenting with routing.
 
 - A new WireGuard keypair is generated each time the tunnel is (re-)established.
 
-- The tools read PIA username/password (from env / envFile) but do not persist
-  them to disk.
+- The tools read PIA username/password (from flags or the environment) but do
+  not persist them to disk.
 
 - API calls and cache updates can be performed as an unprivileged service
   account.
@@ -50,17 +50,6 @@ experimenting with routing.
   system tools (`networkctl`, `ip`) to activate changes.
 
 ## Quick Start
-
-### NixOS
-
-See: [NixOS Module](#nixos-module)
-
-1. Import module
-2. Write/configure envFile
-3. Supply templates, or copy/modify examples into your flake
-4. Build and deploy
-
-### Other Distro
 
 See [Manual Install](#manual-install) and the example units in [`./systemd`](./systemd)
 
@@ -141,7 +130,7 @@ if you have a different networking preference.
 
 | Tool                                                       | Description                                                                                                                                                             |
 |------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [piawgcli](https://gitlab.com/ddb_db/piawgcli)             | Similar approach, also written in go, but without the port forwarding and NixOS features, and generates a wireguard-cli configuration file instead of systemd-networkd. |
+| [piawgcli](https://gitlab.com/ddb_db/piawgcli)             | Similar approach, also written in go, but without the port forwarding features, and generates a wireguard-cli configuration file instead of systemd-networkd.           |
 | [Official](https://github.com/pia-foss/manual-connections) | Bash scripts that accomplish a similar goal using plain-jane networking commands, like `ip`, `wg-quick` and so on. Also has a nice list of links to other alternatives. |
 
 Q: Why not use [miniupnp](https://github.com/miniupnp/miniupnp) (or similar) for
@@ -155,319 +144,6 @@ gateway and the software on the LAN side. This assumption doesn't hold: PIA only
 forwards traffic having a destination port they assign to you. PCP (Port Control
 Protocol) could work for this in theory, if both PIA and Transmission supported
 it, but currently neither do.
-
-## NixOS Module
-
-This repo includes a NixOS module to make it easy to configure and deploy
-on that OS. Just include it as an input in your flake, and configure
-through the `services.pia-tools` option tree. You would probably
-also want to include (your modified version of) the systemd-networkd
-template files ([`pia.netdev.tmpl`](./systemd/network/pia.netdev.tmpl)
-and [`pia.network.tmpl`](./systemd/network/pia.network.tmpl)) in your
-flake repo, or write your own, or base your config on the [detailed
-example](#nixos-detailed-example-configuration), which follows.
-
-### NixOS Module options
-
-| Option                                   | Type                                | Description                                                                                                                                                                                                                                                  |
-| ---------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `services.pia-tools.enable`              | `bool`                              | Enable the pia-tools NixOS module.                                                                                                                                                                                                                           |
-| `services.pia-tools.package`             | `package`                           | The pia-tools package to use.                                                                                                                                                                                                                                |
-| `services.pia-tools.user`                | `string`                            | User to run the tool as.                                                                                                                                                                                                                                     |
-| `services.pia-tools.group`               | `string`                            | Group to run the tool as.                                                                                                                                                                                                                                    |
-| `services.pia-tools.cacheDir`            | `path`                              | Where to store tunnel descriptions in JSON format, containing private keys.                                                                                                                                                                                  |
-| `services.pia-tools.ifname`              | `string`                            | Name of PIA WireGuard network interface.                                                                                                                                                                                                                     |
-| `services.pia-tools.region`              | `string`                            | Region to connect to, or `auto` by default.                                                                                                                                                                                                                  |
-| `services.pia-tools.envFile`             | `path`                              | **Required.** Path to a file that sets environment variables used to set up the tunnel device. Recognized variables include `PIA_USERNAME` and `PIA_PASSWORD` (required).                                                                                    |
-| `services.pia-tools.resetServiceName`    | `string`                            | Name of systemd service for pia-tools tunnel reset.                                                                                                                                                                                                          |
-| `services.pia-tools.resetTimerConfig`    | `null or systemd timerConfig attrs` | Timer defining frequency of resetting the tunnel. Set to `null` to disable.                                                                                                                                                                                  |
-| `services.pia-tools.refreshServiceName`  | `string`                            | Name of systemd service for pia-tools tunnel port forwarding refresh (only relevant if portForwarding is enabled).                                                                                                                                           |
-| `services.pia-tools.refreshTimerConfig`  | `null or systemd timerConfig attrs` | Timer defining frequency of refreshing the tunnel's port forwarding assignment. Set to `null` to disable.                                                                                                                                                    |
-| `services.pia-tools.whitelistScript`     | `null or path`                      | Script to run when the WireGuard endpoint is established (e.g., add the endpoint IP to a firewall passlist). The script is called with the IP as the only argument. Set to `null` to ignore.                                                                 |
-| `services.pia-tools.portForwarding`      | `bool`                              | Whether to request a port forwarding assignment from PIA.                                                                                                                                                                                                    |
-| `services.pia-tools.scriptDir`           | `null or path`                      | Directory of executables to run whenever the forwarded port is set or refreshed, as with `pia-portforward --script-dir` (see below). Files not owned by root are skipped. Ignored unless `portForwarding` is true.                                           |
-| `services.pia-tools.netdevTemplateFile`  | `path`                              | `systemd.netdev` template used to generate the actual `.netdev`.                                                                                                                                                                                             |
-| `services.pia-tools.networkTemplateFile` | `path`                              | `systemd.network` template used to generate the actual `.network`.                                                                                                                                                                                           |
-| `services.pia-tools.netdevFile`          | `path`                              | Path at which to install the generated `.netdev` file.                                                                                                                                                                                                       |
-| `services.pia-tools.networkFile`         | `path`                              | Path at which to install the generated `.network` file.                                                                                                                                                                                                      |
-
-### NixOS Detailed Example Configuration
-
-This example is not likely to be usable by you directly. These are complex
-networking topics, and it is dangerous to rely on examples for your production
-set-up. Do your homework and make sure you have a correct and safe firewall
-configuration.
-
-In this example, we are configuring a firewall host, with a single LAN
-interface:
-
-- pia-tools gets configured to establish a VPN tunnel called `wg_pia`, using
-  inline-defined systemd-networkd templates.
-- The region we connect to will be automatically chosen each time the tunnel is
-  reestablished. It will choose the lowest ping-time server that supports port
-  forwarding.
-- These templates set up a default route through the tunnel in a dedicated
-  routing table, which is used only by traffic from the LAN. The included
-  routing-policy routes forwarded LAN traffic through the VPN while keeping the
-  firewall host’s own traffic (including tunnel establishment) on the WAN.
-- We have a transmission server running on the LAN at 192.168.100.100, and we
-  want to forward UDP ports to it from the VPN.
-- All outgoing IPv4 traffic from the LAN is allowed out through the VPN, from
-  transmission or any other host on the LAN that uses this firewall as its
-  router.
-- In the example, if the VPN link goes down systemd-networkd will remove the VPN
-  default route, in which case LAN traffic should fall back to the WAN default
-  route, unless you enable the optional kill switch.
-- The tunnel gets torn down and remade with a new virtual IP every day at 5:15
-  AM.
-
-#### Notes
-
-- Theoretically, there is no reason this gateway has to be exposed on your WAN,
-  it could, for example, be in a DMZ behind your WAN router, with only certain
-  LAN clients configured (manually or via DHCP) to use its LAN address as its
-  default route. It just needs outbound WAN connectivity in order to establish
-  the tunnel.
-
-- To make this gateway the default for your LAN, you would probably want to
-  configure your DHCPv4 server (if you use one, and you probably should) to
-  advertise the router's LAN address as the default route (DHCP option 3).
-
-- To make this example actually usable in any way, you would need to, at a
-  minimum, configure the LAN and WAN interfaces. The example doesn't address
-  that.
-
-- As written, the example uses the nftables-backed firewall; extraForwardRules
-  are written in nft syntax. If you prefer iptables (I don't), adapt accordingly.
-
-#### Regarding VPN "leaks"
-
-VPN leaks happen when you allow some traffic to bypass the tunnel, such as can
-happen with IPv6 and DNS.
-
-- **IPv6**. PIA doesn't provide IPv6 tunneling; it is an IPv4-only service. If
-  you run an IPv4/IPv6 dual stack on the LAN network, any IPv6 traffic that
-  exits via the WAN interface will bypass the VPN tunnel. Therefore, you may
-  wish to add firewall and/or routing rules to block outgoing IPv6. As it is,
-  this example doesn't enable, disable, or otherwise address IPv6 networking.
-
-- **DNS**. Most connections start with a DNS lookup of a domain name. If
-  that lookup is sent to a public DNS server via a route outside of the VPN
-  tunnel, then you are leaking information about where you make connections.
-  Even when DNS queries are sent through the VPN tunnel, the DNS provider
-  can still log the lookup and its timing; your ISP, however, only sees
-  encrypted traffic to the VPN endpoint and cannot observe the DNS contents.
-  Best practice is to use the VPN-provided DNS servers, which are ostensibly
-  zero-log. If you use DHCP on the LAN, you should therefore advertise PIA's
-  DNS servers in option 6 (`domain-name-servers`). In practice, as of this
-  writing, they are consistently `10.0.0.242` and `10.0.0.243`, but PIA could
-  change them. The addresses are actually retrieved and cached in the json file
-  by `pia-setup-tunnel`, and you could make use of this (in order to, e.g.,
-  dynamically update your DHCP server configuration; I personally don't bother
-  to do so) as the following snippet demonstrates. The example below adds routes
-  to the (dynamically-retrieved) DNS servers, so they should work as long as
-  your LAN subnet does not overlap with `10.0.0.242/31` (for example, if you are
-  using a broad `10.0.0.0/8` LAN).
-
-  ```
-  $ jq -r '.dns_servers[]' /var/cache/pia/wg_pia.json
-  10.0.0.243
-  10.0.0.242
-  ```
-
-#### The NixOS Example
-
-`flake.nix`
-```nix
-inputs = {
-  nixpkgs.url = "...";
-  pia-tools.url = "github:jdelkins/pia-tools";
-};
-
-outputs =
-  { nixpkgs, pia-tools }:
-  {
-    nixosConfigurations.<host> = nixpkgs.lib.nixosSystem {
-      system = "...";
-      modules = [
-        pia-tools.nixosModules.pia-tools
-        (
-          { pkgs, lib, ... }:
-          let
-            wgIf = "wg_pia";
-            lanIf = "lan";
-            transmissionIp = "192.168.100.100";
-            # set to true to disable outbound networking when the VPN link is down
-            killSwitch = false;
-
-            netdevTemplate = pkgs.writeText "${wgIf}.netdev.tmpl" ''
-              [NetDev]
-              Name={{ .Interface }}
-              Kind=wireguard
-
-              [WireGuard]
-              PrivateKey={{ .PrivateKey }}
-
-              [WireGuardPeer]
-              Endpoint={{ .ServerIp }}:{{ .ServerPort }}
-              PublicKey={{ .ServerPubkey }}
-              AllowedIPs=0.0.0.0/0
-              PersistentKeepalive=25
-            '';
-
-            networkTemplate = pkgs.writeText "${wgIf}.network.tmpl" ''
-              [Match]
-              Name={{ .Interface }}
-
-              [Network]
-              Address={{ .PeerIp }}/32
-              {{- range .DnsServers }}
-              DNS={{ . }}
-              {{- end }}
-
-              [Route]
-              Destination={{ .ServerVip }}/32
-              Scope=link
-
-              {{ range .DnsServers -}}
-              [Route]
-              Destination={{ . }}/32
-              Gateway={{ $.ServerVip }}
-              GatewayOnLink=true
-
-              {{ end -}}
-
-              # NOTE: Default route goes in separate routing table. RPDB rules
-              #       must direct traffic to this table to use it.
-              [Route]
-              Destination=0.0.0.0/0
-              Gateway={{ .ServerVip }}
-              GatewayOnLink=true
-              Scope=global
-              Table=vpn
-            '';
-          in
-          {
-            # Create a routing table mapped to the name "vpn", which will house
-            # the default route for packets forwarded from the lan interface.
-            # Local traffic originating on the firewall (importantly including
-            # the encapsulating WireGuard link to PIA's server) will use the
-            # regular default route in the "main" table.
-            systemd.network.config = {
-              routeTables.vpn = 1000;
-              addRouteTablesToIPRoute2 = true;
-            };
-
-            systemd.network.networks.lo = {
-              enable = true;
-              name = "lo";
-              # optional kill switch implementation
-              routes = lib.optional killSwitch {
-                Destination = "0.0.0.0/0";
-                # the high metric means this route will only be used if the VPN
-                # is down, in which case networkd will remove its route, leaving
-                # only this.
-                # Without this, if the VPN is down, the vpn table should be
-                # empty, meaning the rules will fall thorough to the main
-                # routing table, where the host's default route should match.
-                Metric = 100000;
-                Type = "unreachable";
-                Table = "vpn";
-              };
-              # We attach RPDB rules to lo because it’s always present; the
-              # rules apply globally.
-              routingPolicyRules = [
-                # First traverse the main table, but exclude default routes. If
-                # you do LAN routing to multiple internal subnets, they should
-                # be picked up cleanly in this way.
-                {
-                  Priority = 900;
-                  SuppressPrefixLength = 0;
-                  Family = "ipv4";
-                  Table = "main";
-                }
-                # For LAN traffic that doesn't match site local routes above,
-                # send them to the "vpn" table, which should have the VPN
-                # default route, and possibly the "unreachable" kill switch, if
-                # enabled. Local-origin traffic will skip this and go to main
-                # via the default FIB rules.
-                {
-                  Priority = 1000;
-                  IncomingInterface = lanIf;
-                  Family = "ipv4";
-                  Table = "vpn";
-                }
-              ];
-            };
-
-            services.pia-tools = {
-              enable = true;
-              ifname = wgIf;
-
-              # Change this if you want to always connect to a certain regional
-              # server.
-              region = "auto";
-
-              # envFile needs to contain
-              #   PIA_USERNAME=<pia username>
-              #   PIA_PASSWORD=<pia password>
-              # You can put this file in place by hand, or use something like
-              # sops-nix to generate it based on encrypted secrets stored in the
-              # flake repo.
-              envFile = "/etc/pia-secrets.sh";
-
-              # If true, request and maintain a port forwarding
-              # assignment after successfully establishing a tunnel.
-              portForwarding = true;
-
-              # rotate the tunnel daily at 5:15 am
-              resetTimerConfig.OnCalendar = "*-*-* 05:15:00";
-
-              # Your templates. These could be maintained in the flake repo, or
-              # externally. Here, we are writing the template files to the nix
-              # store, and the path resolves the store path.
-              netdevTemplateFile = netdevTemplate;
-              networkTemplateFile = networkTemplate;
-            };
-
-            # minimal firewall configuration. Start with the NixOS firewall module
-            boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
-            networking.firewall.enable = true;
-            networking.nftables.enable = true;
-
-            # masquerading and DNAT. masquerade LAN traffic out of the vpn, and forward
-            # ports >10000 arriving from the vpn to our transmission server
-            networking.nat = {
-              enable = true;
-              externalInterface = wgIf;
-              internalInterfaces = [ lanIf ];
-              forwardPorts = [
-                {
-                  proto = "udp";
-                  sourcePort = "10000:65535";
-                  destination = "${transmissionIp}:10000-65535";
-                }
-              ];
-            };
-
-            # Allow LAN clients (incl. Transmission host) to egress out the VPN.
-            # Allow UDP traffic from the VPN link to transmission. PIA will also
-            # forward TCP but we can just ignore it for bittorrent purposes.
-            # networking.nat only sets up the NAT rules, we have to explicitly
-            # allow the traffic.
-            networking.firewall.extraForwardRules = ''
-              iifname "${lanIf}" oifname "${wgIf}" accept
-              iifname "${wgIf}" oifname "${lanIf}" ct state { established, related } accept
-              iifname "${wgIf}" oifname "${lanIf}" ip daddr ${transmissionIp} udp dport 10000-65535 accept
-            '';
-          }
-        )
-        ...
-      ];
-      ...
-    };
-  };
-```
 
 ## Manual Install
 
@@ -560,12 +236,47 @@ outputs =
        curl -4 ifconfig.me
 
 8. Adjust your network routing, if you wish, to send traffic selectively out
-   of the tunnel. You're on your own here, but for some clues, you might
-   check out the [NixOS example](#the-nixos-example).
+   of the tunnel. You're on your own here.
 
 That's it, you should have a VPN as your IPv4 default route (assuming you
 configured the `.network` file as such). Use something like `curl -4
 icanhazip.com` to verify that the ip address is coming from PIA.
+
+### Regarding VPN "leaks"
+
+VPN leaks happen when you allow some traffic to bypass the tunnel, such as can
+happen with IPv6 and DNS.
+
+- **IPv6**. PIA doesn't provide IPv6 tunneling; it is an IPv4-only service. If
+  you run an IPv4/IPv6 dual stack, any IPv6 traffic that exits via the WAN
+  interface will bypass the VPN tunnel. Therefore, you may wish to add firewall
+  and/or routing rules to block outgoing IPv6. The example templates don't
+  enable, disable, or otherwise address IPv6 networking.
+
+- **DNS**. Most connections start with a DNS lookup of a domain name. If
+  that lookup is sent to a public DNS server via a route outside of the VPN
+  tunnel, then you are leaking information about where you make connections.
+  Even when DNS queries are sent through the VPN tunnel, the DNS provider
+  can still log the lookup and its timing; your ISP, however, only sees
+  encrypted traffic to the VPN endpoint and cannot observe the DNS contents.
+  Best practice is to use the VPN-provided DNS servers, which are ostensibly
+  zero-log. If you use DHCP on the LAN, you should therefore advertise PIA's
+  DNS servers in option 6 (`domain-name-servers`). In practice, as of this
+  writing, they are consistently `10.0.0.242` and `10.0.0.243`, but PIA could
+  change them. The addresses are actually retrieved and cached in the json file
+  by `pia-setup-tunnel`, and you could make use of this (in order to, e.g.,
+  dynamically update your DHCP server configuration; I personally don't bother
+  to do so) as the following snippet demonstrates. The example
+  [`pia.network.tmpl`](./systemd/network/pia.network.tmpl) adds routes to the
+  (dynamically-retrieved) DNS servers, so they should work as long as your LAN
+  subnet does not overlap with `10.0.0.242/31` (for example, if you are using a
+  broad `10.0.0.0/8` LAN).
+
+  ```console
+  $ jq -r '.dns_servers[]' /var/cache/pia/pia.json
+  10.0.0.243
+  10.0.0.242
+  ```
 
 ### Enabling Port Forwarding
 
@@ -812,38 +523,6 @@ longer one to refresh.
 
 ```sh
 pia-portforward --if-name pia --script-dir /usr/local/lib/pia-pf
-```
-
-#### NixOS: Running CLI without installing
-
-The project's flake includes "app" outputs for the three CLI programs, allowing
-NixOS users to run the CLI programs from the github repo without installing
-them. Examples:
-
-```sh
-# This will list the available PIA regions and their ping time
-# using pia-listregions
-nix run github:jdelkins/pia-tools
-
-# This does the same thing, explicitly naming the app (listregions
-# is the default app)
-nix run github:jdelkins/pia-tools#listregions
-
-# Runs pia-setup-tunnel --help
-nix run github:jdelkins/pia-tools#setup-tunnel -- --help
-
-# Runs pia-portforward --help
-nix run github:jdelkins/pia-tools#portforward -- --help
-```
-
-Alternatively, you could use `nix shell` to make the CLI programs temporarily
-available to you in a subshell.
-
-```sh
-nix shell github:jdelkins/pia-tools
-pia-listregions
-pia-setup-tunnel --help
-pia-portforward --help
 ```
 
 ## Troubleshooting
