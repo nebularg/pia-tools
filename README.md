@@ -8,7 +8,7 @@ tell a BitTorrent client about it; this will allow receiving incoming BitTorrent
 peer connections over the VPN.
 
 A helper utility, `pia-listregions`, will show you, on your terminal, a ranked
-(by ping time) list of PIA servers, with some possibly-salient info about them,
+(by latency) list of PIA servers, with some possibly-salient info about them,
 with the goal of helping you choose the 'best' region to connect to if you are
 otherwise indifferent about their geography.
 
@@ -524,15 +524,6 @@ longer one to refresh.
 ```sh
 pia-portforward --if-name pia --script-dir /usr/local/lib/pia-pf
 ```
-
-## Troubleshooting
-
-The `pia-listregions` tool attempts to send a non-root ping. If this is not
-permitted by default on your system, run the binary as root or else it must be
-enabled with a sysctl command like the following:
-
-    sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"
-
 
 [systemd-networkd]: https://www.freedesktop.org/software/systemd/man/systemd.network.html
 [wireguard]: https://www.wireguard.com/

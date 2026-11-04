@@ -10,13 +10,13 @@ import (
 )
 
 func main() {
-	regions, err := pia.RegionsWithPingTime()
+	regions, err := pia.RegionsWithLatency()
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
-	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", "ID",             "NAME",                    "PING",      "WG?", "PF?")
+	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", "ID",             "NAME",                    "LATENCY",   "WG?", "PF?")
 	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", "==============", "=======================", "=========", "===", "===")
 	for i := range regions {
 		r := &regions[i]
@@ -28,10 +28,10 @@ func main() {
 		if r.PortForward {
 			pf = " ✓"
 		}
-		if r.PingTime == 0 {
+		if r.Latency == 0 {
 			fmt.Fprintf(w, "%s\t%s\tN/A\t%s\t%s\n", r.Id, r.Name, wg, pf)
 		} else {
-			fmt.Fprintf(w, "%s\t%s\t%d ms\t%s\t%s\n", r.Id, r.Name, r.PingTime.Milliseconds(), wg, pf)
+			fmt.Fprintf(w, "%s\t%s\t%d ms\t%s\t%s\n", r.Id, r.Name, r.Latency.Milliseconds(), wg, pf)
 		}
 	}
 	w.Flush()

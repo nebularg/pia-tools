@@ -87,18 +87,18 @@ func main() {
 	// Find the "best" reg_id if requested
 	var reg *pia.Region
 	if cli.Region == "auto" || cli.Region == "" {
-		regions, err := pia.RegionsWithPingTime()
+		regions, err := pia.RegionsWithLatency()
 		if err != nil {
 			log.Panicf("Could not enumerate regions: %v", err)
 		}
-		// region list should be sorted by ping time from best to worst, so we
+		// region list should be sorted by latency from best to worst, so we
 		// just need to find the first one in the list that has both port
 		// forwarding and wireguard
 		for i := range regions {
 			r := &regions[i]
 			if r.HasWg() && r.PortForward {
 				reg = r
-				fmt.Printf("Selected region %s (%s), having ping time %d ms\n", r.Id, r.Name, r.PingTime.Milliseconds())
+				fmt.Printf("Selected region %s (%s), having latency %d ms\n", r.Id, r.Name, r.Latency.Milliseconds())
 				break
 			}
 		}
