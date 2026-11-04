@@ -15,6 +15,7 @@ type Region struct {
 	Id          string              `json:"id"`
 	Name        string              `json:"name"`
 	PortForward bool                `json:"port_forward"`
+	Geo         bool                `json:"geo"`
 	Servers     map[string][]Server `json:"servers"`
 	Latency     time.Duration
 }

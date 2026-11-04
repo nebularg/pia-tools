@@ -335,8 +335,12 @@ repository provides two primary command-line utilities:
 These are designed to work together for configuring and maintaining a PIA
 WireGuard tunnel and optional port forwarding.
 
-Additionally, `pia-listregions`, which accepts no flags or other configuration,
-simply downloads and lists the available regions as discussed above.
+Additionally, `pia-listregions` simply downloads and lists the available regions
+as discussed above. With `--pf` (or `-f`), only regions that support port
+forwarding are listed, and with `--geo` (or `-g`), only [geo-located
+regions][geo], whose servers are in another country but use IP addresses
+registered to the one they are named for. `--no-pf` (`-F`) and `--no-geo`
+(`-G`) invert these, listing only regions without the feature.
 
 ### pia-setup-tunnel
 
@@ -528,5 +532,6 @@ pia-portforward --if-name pia --script-dir /usr/local/lib/pia-pf
 [systemd-networkd]: https://www.freedesktop.org/software/systemd/man/systemd.network.html
 [wireguard]: https://www.wireguard.com/
 [PIA]: https://www.privateinternetaccess.com/
+[geo]: https://www.privateinternetaccess.com/blog/private-internet-access-to-expand-network-with-30-geo-located-regions/
 [sprig]: http://masterminds.github.io/sprig/
 [text-template]: https://pkg.go.dev/text/template

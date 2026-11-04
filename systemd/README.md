@@ -37,16 +37,16 @@ Assumes:
 
         $ GOBIN=/usr/local/bin go install github.com/jdelkins/pia-tools/cmd/pia-listregions@latest
         $ /usr/local/bin/pia-listregions
-        ID                 NAME                         LATENCY    WG?  PF?
-        ==============     =======================      =========  ===  ===
-        us_houston         US Houston                   25 ms       ✓
-        us_south_west      US Texas                     30 ms       ✓
-        us_atlanta         US Atlanta                   38 ms       ✓
-        us_denver          US Denver                    39 ms       ✓
-        bogota             Colombia                     46 ms       ✓    ✓
-        santiago           Chile                        46 ms       ✓    ✓
-        us_florida         US Florida                   47 ms       ✓
-        ar                 Argentina                    48 ms       ✓    ✓
+        ID                    NAME                                LATENCY    GEO?  PF?
+        ==============        =======================             =========  ====  ===
+        us_south_dakota-pf    US South Dakota                     43 ms
+        us_new_york_city      US New York                         49 ms
+        us_missouri-pf        US Missouri                         49 ms       ✓
+        us_wisconsin-pf       US Wisconsin                        49 ms       ✓
+        us-newjersey          US East                             51 ms
+        us-brooklyn           US Brooklyn                         52 ms
+        us_maine-pf           US Maine                            53 ms       ✓
+        us-baltimore          US Baltimore                        53 ms       ✓
         ...
 
 3. Edit the `/etc/systemd/network/*.tmpl` files to define how your tunnel will
