@@ -43,7 +43,8 @@ experimenting with routing.
   account.
 
 - Root privileges are required only to write into privileged locations
-  (`/etc/systemd/network`) and to apply link changes.
+  (`/etc/systemd/network`), to apply link changes, and to run port forwarding
+  scripts, which may need to change system configuration (e.g. firewall rules).
 
 - Intended to be automated via systemd; the included units invoke standard
   system tools (`networkctl`, `ip`) to activate changes.

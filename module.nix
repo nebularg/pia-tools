@@ -274,7 +274,7 @@ in
         ]
         ++ lib.optionals (cfg.portForwarding) [
           "${pkgs.coreutils}/bin/sleep 10"
-          "-${cfg.package}/bin/pia-portforward ${portforwardArgs}"
+          "-+${cfg.package}/bin/pia-portforward ${portforwardArgs}"
         ];
       };
     };
@@ -292,7 +292,9 @@ in
       name = "${cfg.refreshServiceName}.service";
       path = [ pkgs.wireguard-tools ];
       serviceConfig = {
-        User = cfg.user;
+        # root so that scripts in scriptDir can change system configuration
+        # (e.g. firewall rules)
+        User = "root";
         Type = "oneshot";
         EnvironmentFile = [ cfg.envFile ];
         ExecStart = "${cfg.package}/bin/pia-portforward ${portforwardArgs} --refresh";

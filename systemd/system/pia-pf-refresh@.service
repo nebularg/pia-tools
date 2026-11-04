@@ -5,7 +5,6 @@ ConditionFileNotEmpty=/var/cache/pia/%I.json
 ConditionPathExists=/etc/pia.conf
 
 [Service]
-User=pia
 EnvironmentFile=/etc/pia.conf
 Type=oneshot
 ExecStart=/usr/local/bin/pia-portforward --if-name %I --refresh
