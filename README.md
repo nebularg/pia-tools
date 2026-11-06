@@ -223,8 +223,10 @@ it, but currently neither do.
 
     - generates a new WireGuard keypair
     - if region is "auto", determine the closest port-forward capable region
+    - if a dedicated IP token is configured, looks up the dedicated IP and
+      uses it instead of a region
     - registers the new WireGuard public key with PIA
-    - gets the connection details from PIA based on the configured (or auto-selected) region
+    - gets the connection details from PIA based on the configured (or auto-selected) region, or the dedicated IP
     - regenerates the systemd-networkd config files using the templates
     - tears down the existing tunnel interface, if it exists
     - tells networkd to build the interface from the new config
@@ -354,7 +356,7 @@ typically, therefore, invoked from a systemd unit but may also be run manually.
 The command:
 
 - Authenticates to PIA using your username and password
-- Selects a region
+- Selects a region, or looks up your dedicated IP
 - Generates WireGuard keys and retrieves endpoint configuration
 - Writes systemd-networkd configuration files
 
@@ -373,6 +375,7 @@ everything else. Credentials may be provided via flags or environment variables:
 | Flag                         | Environment Var | Default          | Meaning                                                                                                             |
 |------------------------------|-----------------|------------------|---------------------------------------------------------------------------------------------------------------------|
 | `--region string`            | PIA_REGION      | `auto`           | PIA region identifier (e.g., us_chicago, us_texas)                                                                  |
+| `--dip-token string`         | DIP_TOKEN       | _unset_          | PIA dedicated IP token. Connects to the dedicated IP instead of a region, so `--region` is ignored.                 |
 | `--username string`          | PIA_USERNAME    | _required_       | PIA account username                                                                                                |
 | `--password string`          | PIA_PASSWORD    | _required_       | PIA account password                                                                                                |
 | `--if-name string`           | _n/a_           | `pia`            | Interface name to create or reconfigure (e.g., v4, wg0)                                                             |

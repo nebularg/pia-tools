@@ -18,19 +18,19 @@ func (t Token) Valid() bool {
 	return t.Token != "" && time.Now().Before(t.Expiry)
 }
 
-func (tun *Tunnel) NewToken(username string, password string) error {
+func NewToken(username string, password string) (Token, error) {
 	vals := url.Values{
 		"username": {username},
 		"password": {password},
 	}
 	req, err := http.NewRequest("POST", "https://www.privateinternetaccess.com/api/client/v2/token", strings.NewReader(vals.Encode()))
 	if err != nil {
-		return err
+		return Token{}, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return Token{}, err
 	}
 	defer resp.Body.Close()
 
@@ -40,18 +40,17 @@ func (tun *Tunnel) NewToken(username string, password string) error {
 		Message string `json:"message"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return err
+		return Token{}, err
 	}
 	if tokenResp.Token == "" {
 		if tokenResp.Status != "" || tokenResp.Message != "" {
-			return fmt.Errorf("error generating PIA token: status=\"%s\" message=\"%s\"", tokenResp.Status, tokenResp.Message)
+			return Token{}, fmt.Errorf("error generating PIA token: status=\"%s\" message=\"%s\"", tokenResp.Status, tokenResp.Message)
 		}
-		return fmt.Errorf("error generating PIA token: empty token response (HTTP %s)", resp.Status)
+		return Token{}, fmt.Errorf("error generating PIA token: empty token response (HTTP %s)", resp.Status)
 	}
 	day, _ := time.ParseDuration("23h55m")
-	tun.Token = Token{
+	return Token{
 		Token:  tokenResp.Token,
 		Expiry: time.Now().Add(day),
-	}
-	return nil
+	}, nil
 }

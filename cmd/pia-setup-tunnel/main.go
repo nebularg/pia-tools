@@ -1,8 +1,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
+	"strings"
+	"time"
 
 	"github.com/alecthomas/kong"
 	"github.com/jdelkins/pia-tools/internal/fileops"
@@ -16,6 +19,7 @@ type CLI struct {
 	Username  string `short:"u" env:"PIA_USERNAME" required:"" help:"PIA username (required; may also be set via PIA_USERNAME)."`
 	Password  string `short:"p" env:"PIA_PASSWORD" required:"" help:"PIA password (required; may also be set via PIA_PASSWORD)."`
 	Region    string `short:"r" env:"PIA_REGION" default:"auto" help:"PIA region id (or 'auto')."`
+	DIPToken  string `short:"d" env:"DIP_TOKEN" help:"PIA dedicated IP token; connects to the dedicated IP instead of a region."`
 	CacheDir  string `short:"c" aliases:"cachedir" default:"/var/cache/pia" help:"Path in which to store security-sensitive cache files."`
 	WGBinary  string `short:"b" default:"wg" help:"Path to the 'wg' binary from wireguard-tools."`
 	FromCache bool   `aliases:"cached" help:"Generate systemd-networkd files from the cached tunnel info."`
@@ -30,6 +34,10 @@ type CLI struct {
 func (c *CLI) AfterApply(ctx *kong.Context) error {
 	_ = ctx
 	const pathSN = "/etc/systemd/network"
+
+	if c.DIPToken != "" && (len(c.DIPToken) != 32 || !strings.HasPrefix(c.DIPToken, "DIP")) {
+		return errors.New("a dedicated IP token is 32 characters long and starts with \"DIP\"")
+	}
 
 	// Provide sane defaults if the flags are omitted or missing keys.
 	if c.NetdevFile == nil {
@@ -84,9 +92,25 @@ func main() {
 		return
 	}
 
-	// Find the "best" reg_id if requested
+	token, err := pia.NewToken(cli.Username, cli.Password)
+	if err != nil {
+		log.Panicf("Could not get token: %v", err)
+	}
+
+	// Use the dedicated IP if given, otherwise find the "best" reg_id if
+	// requested
 	var reg *pia.Region
-	if cli.Region == "auto" || cli.Region == "" {
+	if cli.DIPToken != "" {
+		dip, err := pia.FindDedicatedIP(token, cli.DIPToken)
+		if err != nil {
+			log.Panicf("%v", err)
+		}
+		reg = dip.Region()
+		fmt.Printf("Using dedicated IP %s (%s), valid until %s\n", dip.Ip, dip.Cn, dip.Expiry.Format(time.DateTime))
+		if !reg.PortForward {
+			fmt.Println("Warning: this dedicated IP does not support port forwarding")
+		}
+	} else if cli.Region == "auto" || cli.Region == "" {
 		regions, err := pia.RegionsWithLatency()
 		if err != nil {
 			log.Panicf("Could not enumerate regions: %v", err)
@@ -106,15 +130,16 @@ func main() {
 
 	// Get configured region details, if not "auto"
 	if reg == nil {
-		var err error
 		reg, err = pia.FindRegion(cli.Region)
 		if err != nil {
 			log.Panicf("%v", err)
 		}
 	}
 
-	// Create a Tunnel struct and populate it with fresh WG keys and an access token
+	// Create a Tunnel struct and populate it with fresh WG keys and the access
+	// token
 	tun := pia.NewTunnel(reg, cli.IfName)
+	tun.Token = token
 	defer func() {
 		if err := tun.SaveCache(cli.CacheDir); err != nil {
 			log.Panicf("Could not save cache: %v", err)
@@ -123,14 +148,10 @@ func main() {
 	if err := genKeypair(tun, cli.WGBinary); err != nil {
 		log.Panicf("Could not generate keypair: %v", err)
 	}
-	if !tun.Token.Valid() {
-		if err := tun.NewToken(cli.Username, cli.Password); err != nil {
-			log.Panicf("Could not get token: %v", err)
-		}
-	}
 
-	// Register the WG keys to our account (identified by access token)
-	if err := tun.Activate(); err != nil {
+	// Register the WG keys to our account (identified by access token) or
+	// dedicated IP
+	if err := tun.Activate(cli.DIPToken); err != nil {
 		log.Panicf("Could not register public key: %v", err)
 	}
 

@@ -104,17 +104,25 @@ func doRequest(req *http.Request, server_name string) (*http.Response, error) {
 	return c.Do(req)
 }
 
-func (tun *Tunnel) Activate() error {
-	url := fmt.Sprintf("https://%s:1337/addKey", tun.Region.WgServer().Ip)
+// Activate registers the tunnel's public key with its WireGuard server,
+// authenticating with the dedicated IP token if one is given, or the tunnel's
+// token otherwise.
+func (tun *Tunnel) Activate(dipToken string) error {
+	server := tun.Region.WgServer()
+	url := fmt.Sprintf("https://%s:1337/addKey", server.Ip)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return err
 	}
 	q := req.URL.Query()
-	q.Add("pt", tun.Token.Token)
+	if dipToken == "" {
+		q.Add("pt", tun.Token.Token)
+	} else {
+		req.SetBasicAuth("dedicated_ip_"+dipToken, server.Ip)
+	}
 	q.Add("pubkey", tun.PublicKey)
 	req.URL.RawQuery = q.Encode()
-	resp, err := doRequest(req, tun.Region.WgServer().Cn)
+	resp, err := doRequest(req, server.Cn)
 	if err != nil {
 		return err
 	}

@@ -199,9 +199,11 @@ func forwardPort(tun *pia.Tunnel, username, password string, refresh bool) error
 		if username == "" || password == "" {
 			return errors.New("token expired and user/pass not provided")
 		}
-		if err := tun.NewToken(username, password); err != nil {
+		token, err := pia.NewToken(username, password)
+		if err != nil {
 			return fmt.Errorf("could not refresh expired token: %w", err)
 		}
+		tun.Token = token
 	}
 
 	// request new port unless refresh, or if a previous failure cleared it
