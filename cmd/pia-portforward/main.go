@@ -257,12 +257,12 @@ func main() {
 		}
 	}
 
+	fmt.Printf("%s: %s (Port = %d)\n", tun.Status, tun.Message, tun.PFSig.Port)
+
 	// run user scripts
 	if cli.ScriptDir != "" {
 		failed = append(failed, runScripts(cli.ScriptDir, tun, prevPort)...)
 	}
-
-	fmt.Printf("%s: %s (Port = %d)\n", tun.Status, tun.Message, tun.PFSig.Port)
 
 	if len(failed) > 0 {
 		log.Fatalf("Failed: %s", strings.Join(failed, ", "))
