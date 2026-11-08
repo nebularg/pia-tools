@@ -10,10 +10,13 @@ import (
 )
 
 type DedicatedIP struct {
-	Ip     string
-	Cn     string
-	Id     string
-	Expiry time.Time
+	Ip     string    `json:"ip"`
+	Cn     string    `json:"cn"`
+	Id     string    `json:"id"`
+	Expiry time.Time `json:"expiry"`
+	// KeyHostname is the username with which to register a WireGuard key
+	// with the dedicated IP's server. It contains the dedicated IP token.
+	KeyHostname string `json:"key_hostname"`
 }
 
 // Region returns a region whose only server is the dedicated IP. As in PIA's
@@ -67,9 +70,10 @@ func FindDedicatedIP(token Token, dipToken string) (*DedicatedIP, error) {
 		return nil, fmt.Errorf("dedicated IP token is not active: status=\"%s\"", dips[0].Status)
 	}
 	return &DedicatedIP{
-		Ip:     dips[0].Ip,
-		Cn:     dips[0].Cn,
-		Id:     dips[0].Id,
-		Expiry: time.Unix(dips[0].Expire, 0),
+		Ip:          dips[0].Ip,
+		Cn:          dips[0].Cn,
+		Id:          dips[0].Id,
+		Expiry:      time.Unix(dips[0].Expire, 0),
+		KeyHostname: "dedicated_ip_" + dipToken,
 	}, nil
 }

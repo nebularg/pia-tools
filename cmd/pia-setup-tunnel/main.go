@@ -100,8 +100,9 @@ func main() {
 	// Use the dedicated IP if given, otherwise find the "best" reg_id if
 	// requested
 	var reg *pia.Region
+	var dip *pia.DedicatedIP
 	if cli.DIPToken != "" {
-		dip, err := pia.FindDedicatedIP(token, cli.DIPToken)
+		dip, err = pia.FindDedicatedIP(token, cli.DIPToken)
 		if err != nil {
 			log.Panicf("%v", err)
 		}
@@ -136,10 +137,11 @@ func main() {
 		}
 	}
 
-	// Create a Tunnel struct and populate it with fresh WG keys and the access
-	// token
+	// Create a Tunnel struct and populate it with fresh WG keys, the access
+	// token, and the dedicated IP, if any
 	tun := pia.NewTunnel(reg, cli.IfName)
 	tun.Token = token
+	tun.DedicatedIP = dip
 	defer func() {
 		if err := tun.SaveCache(cli.CacheDir); err != nil {
 			log.Panicf("Could not save cache: %v", err)
@@ -151,7 +153,7 @@ func main() {
 
 	// Register the WG keys to our account (identified by access token) or
 	// dedicated IP
-	if err := tun.Activate(cli.DIPToken); err != nil {
+	if err := tun.Activate(); err != nil {
 		log.Panicf("Could not register public key: %v", err)
 	}
 

@@ -98,6 +98,9 @@ func scriptJSON(tun *pia.Tunnel) (string, error) {
 	delete(m["token"].(map[string]any), "token")
 	delete(m["PFSig"].(map[string]any), "signature")
 	delete(m["PFSig"].(map[string]any), "payload")
+	if dip, ok := m["DedicatedIP"].(map[string]any); ok {
+		delete(dip, "key_hostname")
+	}
 	b, err = json.Marshal(m)
 	if err != nil {
 		return "", err

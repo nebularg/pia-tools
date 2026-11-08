@@ -12,8 +12,13 @@ Kind=wireguard
 [WireGuard]
 PrivateKey={{ .PrivateKey }}
 
-# Region is {{ $reg.Id }} ({{ $reg.Name }} {{ ($tun | server).Cn }}). The ping
-# time at the time of configuration was {{ $reg.PingTime }}.
+{{ if $tun.DedicatedIP -}}
+# Dedicated IP {{ $tun.DedicatedIP.Ip }} ({{ $tun.DedicatedIP.Cn }}) in region
+# {{ $reg.Id }}, valid until {{ $tun.DedicatedIP.Expiry | date "2006-01-02 15:04:05 MST" }}.
+{{- else -}}
+# Region is {{ $reg.Id }} ({{ $reg.Name }} {{ ($tun | server).Cn }}). The
+# latency at the time of configuration was {{ $reg.Latency }}.
+{{- end }}
 
 [WireGuardPeer]
 Endpoint={{ $tun.ServerIp }}:{{ $tun.ServerPort }}

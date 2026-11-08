@@ -280,6 +280,15 @@ happen with IPv6 and DNS.
   10.0.0.242
   ```
 
+  Likewise, when a dedicated IP is used, its details are cached under
+  `DedicatedIP`, which is absent otherwise. Its `key_hostname` contains the
+  dedicated IP token, and is left out of `PIA_JSON`:
+
+  ```console
+  $ jq -r '.DedicatedIP.expiry' /var/cache/pia/pia.json
+  2027-03-01T00:00:00Z
+  ```
+
 ### Enabling Port Forwarding
 
 If you also want incoming traffic on a single TCP port and a single UDP port

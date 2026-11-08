@@ -31,6 +31,7 @@ type Tunnel struct {
 	Message      string         `json:"message"`
 	Interface    string         `json:"interface"`
 	PFSig        PortForwardSig `json:",omitempty"`
+	DedicatedIP  *DedicatedIP   `json:",omitempty"`
 }
 
 func NewTunnel(region *Region, intf string) *Tunnel {
@@ -105,9 +106,9 @@ func doRequest(req *http.Request, server_name string) (*http.Response, error) {
 }
 
 // Activate registers the tunnel's public key with its WireGuard server,
-// authenticating with the dedicated IP token if one is given, or the tunnel's
-// token otherwise.
-func (tun *Tunnel) Activate(dipToken string) error {
+// authenticating with the dedicated IP's credentials if the tunnel has one, or
+// the tunnel's token otherwise.
+func (tun *Tunnel) Activate() error {
 	server := tun.Region.WgServer()
 	url := fmt.Sprintf("https://%s:1337/addKey", server.Ip)
 	req, err := http.NewRequest("GET", url, nil)
@@ -115,10 +116,10 @@ func (tun *Tunnel) Activate(dipToken string) error {
 		return err
 	}
 	q := req.URL.Query()
-	if dipToken == "" {
+	if tun.DedicatedIP == nil {
 		q.Add("pt", tun.Token.Token)
 	} else {
-		req.SetBasicAuth("dedicated_ip_"+dipToken, server.Ip)
+		req.SetBasicAuth(tun.DedicatedIP.KeyHostname, server.Ip)
 	}
 	q.Add("pubkey", tun.PublicKey)
 	req.URL.RawQuery = q.Encode()
